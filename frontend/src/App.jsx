@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { supabase, hasSupabase } from './supabase'
 
-const API_BASE = 'http://localhost:8080/api/employees'
+const TABLE = 'employees'
 
 export default function App() {
   const [employees, setEmployees] = useState([])
@@ -17,11 +18,17 @@ export default function App() {
   const load = async () => {
     setLoading(true)
     try {
-      const res = await fetch(API_BASE)
-      if (!res.ok) throw new Error('Failed to load')
-      const data = await res.json()
-      setEmployees(data)
-    } catch {}
+      if (!hasSupabase) throw new Error('Supabase env missing')
+      const { data, error } = await supabase
+        .from(TABLE)
+        .select('*')
+        .order('created_at', { ascending: false })
+      if (error) throw error
+      setEmployees(data || [])
+    } catch (err) {
+      setToast('Configure Supabase env to load data')
+      setTimeout(() => setToast(''), 2500)
+    }
     setLoading(false)
   }
 
@@ -31,14 +38,17 @@ export default function App() {
     e.preventDefault()
     const payload = { ...form, salary: Number(form.salary) }
     try {
-      const res = await fetch(API_BASE, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-      if (!res.ok) throw new Error('Create failed')
+      if (!hasSupabase) throw new Error('Supabase env missing')
+      const { error } = await supabase
+        .from(TABLE)
+        .insert([{ ...payload }])
+      if (error) throw error
       setForm({ name: '', email: '', role: '', salary: '' })
       setToast('Employee added')
       setTimeout(() => setToast(''), 1800)
       load()
     } catch (err) {
-      setToast('Backend unavailable. Start server to add data.')
+      setToast('Supabase unavailable. Set URL and anon key.')
       setTimeout(() => setToast(''), 2500)
     }
   }
@@ -48,8 +58,9 @@ export default function App() {
   const doDelete = async () => {
     const id = confirmId
     setConfirmId(null)
-    const res = await fetch(`${API_BASE}/${id}`, { method: 'DELETE' })
-    if (res.ok) {
+    if (!hasSupabase) return
+    const { error } = await supabase.from(TABLE).delete().eq('id', id)
+    if (!error) {
       setToast('Employee deleted')
       setTimeout(() => setToast(''), 1500)
       load()
@@ -63,8 +74,9 @@ export default function App() {
   const cancelEdit = () => setEditing(null)
   const saveEdit = async () => {
     const payload = { ...editForm, salary: Number(editForm.salary) }
-    const res = await fetch(`${API_BASE}/${editing.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-    if (res.ok) {
+    if (!hasSupabase) return
+    const { error } = await supabase.from(TABLE).update(payload).eq('id', editing.id)
+    if (!error) {
       setEditing(null)
       setToast('Employee updated')
       setTimeout(() => setToast(''), 1500)
@@ -76,8 +88,9 @@ export default function App() {
     const q = query.trim().toLowerCase()
     const base = q ? employees.filter(e => `${e.name} ${e.email} ${e.role}`.toLowerCase().includes(q)) : employees
     const sorted = [...base].sort((a,b) => {
-      const va = a[sortKey]
-      const vb = b[sortKey]
+      const key = sortKey === 'createdAt' ? 'created_at' : sortKey
+      const va = a[key]
+      const vb = b[key]
       if (va === vb) return 0
       const cmp = va > vb ? 1 : -1
       return sortDir === 'asc' ? cmp : -cmp
