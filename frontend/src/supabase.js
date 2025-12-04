@@ -5,4 +5,4 @@ const key = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 export const hasSupabase = Boolean(url && key)
 export const supabase = hasSupabase ? createClient(url, key) : null
-
+export const storageKey = 'ems_employees'

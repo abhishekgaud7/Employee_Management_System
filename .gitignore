@@ -43,9 +43,15 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+.turbo/
+.parcel-cache/
+.rollup.cache/
+.eslintcache
 .next/
 .cache/
 coverage/
+dist/
+frontend/dist/
 
 # Environment files
 .env

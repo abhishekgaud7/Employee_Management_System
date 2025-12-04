@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { supabase, hasSupabase } from './supabase'
+import { supabase, hasSupabase, storageKey } from './supabase'
 
 const TABLE = 'employees'
 
@@ -18,13 +18,18 @@ export default function App() {
   const load = async () => {
     setLoading(true)
     try {
-      if (!hasSupabase) throw new Error('Supabase env missing')
-      const { data, error } = await supabase
-        .from(TABLE)
-        .select('*')
-        .order('created_at', { ascending: false })
-      if (error) throw error
-      setEmployees(data || [])
+      if (hasSupabase) {
+        const { data, error } = await supabase
+          .from(TABLE)
+          .select('*')
+          .order('created_at', { ascending: false })
+        if (error) throw error
+        setEmployees(data || [])
+      } else {
+        const raw = localStorage.getItem(storageKey)
+        const data = raw ? JSON.parse(raw) : []
+        setEmployees(data)
+      }
     } catch (err) {
       setToast('Configure Supabase env to load data')
       setTimeout(() => setToast(''), 2500)
@@ -38,11 +43,17 @@ export default function App() {
     e.preventDefault()
     const payload = { ...form, salary: Number(form.salary) }
     try {
-      if (!hasSupabase) throw new Error('Supabase env missing')
-      const { error } = await supabase
-        .from(TABLE)
-        .insert([{ ...payload }])
-      if (error) throw error
+      if (hasSupabase) {
+        const { error } = await supabase
+          .from(TABLE)
+          .insert([{ ...payload }])
+        if (error) throw error
+      } else {
+        const raw = localStorage.getItem(storageKey)
+        const list = raw ? JSON.parse(raw) : []
+        const row = { id: Date.now(), ...payload, created_at: new Date().toISOString() }
+        localStorage.setItem(storageKey, JSON.stringify([row, ...list]))
+      }
       setForm({ name: '', email: '', role: '', salary: '' })
       setToast('Employee added')
       setTimeout(() => setToast(''), 1800)
@@ -58,9 +69,18 @@ export default function App() {
   const doDelete = async () => {
     const id = confirmId
     setConfirmId(null)
-    if (!hasSupabase) return
-    const { error } = await supabase.from(TABLE).delete().eq('id', id)
-    if (!error) {
+    if (hasSupabase) {
+      const { error } = await supabase.from(TABLE).delete().eq('id', id)
+      if (!error) {
+        setToast('Employee deleted')
+        setTimeout(() => setToast(''), 1500)
+        load()
+      }
+    } else {
+      const raw = localStorage.getItem(storageKey)
+      const list = raw ? JSON.parse(raw) : []
+      const next = list.filter(e => e.id !== id)
+      localStorage.setItem(storageKey, JSON.stringify(next))
       setToast('Employee deleted')
       setTimeout(() => setToast(''), 1500)
       load()
@@ -74,9 +94,19 @@ export default function App() {
   const cancelEdit = () => setEditing(null)
   const saveEdit = async () => {
     const payload = { ...editForm, salary: Number(editForm.salary) }
-    if (!hasSupabase) return
-    const { error } = await supabase.from(TABLE).update(payload).eq('id', editing.id)
-    if (!error) {
+    if (hasSupabase) {
+      const { error } = await supabase.from(TABLE).update(payload).eq('id', editing.id)
+      if (!error) {
+        setEditing(null)
+        setToast('Employee updated')
+        setTimeout(() => setToast(''), 1500)
+        load()
+      }
+    } else {
+      const raw = localStorage.getItem(storageKey)
+      const list = raw ? JSON.parse(raw) : []
+      const next = list.map(e => e.id === editing.id ? { ...e, ...payload } : e)
+      localStorage.setItem(storageKey, JSON.stringify(next))
       setEditing(null)
       setToast('Employee updated')
       setTimeout(() => setToast(''), 1500)
